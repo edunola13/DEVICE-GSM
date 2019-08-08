@@ -1,0 +1,2 @@
+//MENSAJES PRINT
+#define MSG_START "START"
