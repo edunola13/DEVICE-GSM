@@ -6,12 +6,13 @@
 
 Sim800L GSM(RX, TX);
 
-uint8_t status = 0;
-bool ring = false;
-bool sms = false;
-uint8_t index = 1; // Index from read SMS
+uint8_t status = 0; // Status
+bool ring = false; // New Call
+bool carrier = false; // Carrier
+bool sms = false; // New Sms
 String msg; // Last SMS read
-String number = ""; // Number calling
+// String number = ""; // Number calling
+char number[20]; // Number calling
 
 void initGsm() {
   GSM.begin(9600);
@@ -21,12 +22,13 @@ void initGsm() {
     config = GSM.setMessageStorage("SM");
     config = config && GSM.setMessageFormat("1");
   }
-  Serial.println("GSM Ready");
+  DEB_DO_PRINTLN("GSM Ready");
 }
 
 void updateStatus() {
   String data = GSM._readSerial(50);
   while (data.length() > 2) {
+    Serial.println(data);
     uint8_t i = data.indexOf("\r\n");
     if (i == -1) {
       break;
@@ -36,55 +38,78 @@ void updateStatus() {
     if (line.indexOf("RING") != -1) {
       if (! ring) {
         ring = true;
-        number = "";
+        // number = "";
+        memset(&number, 255, sizeof(number));
+        carrier = false;
       }
     } else if (line.indexOf("+CLIP:") != -1) {
       i = line.indexOf("\"");
-      number = line.substring(i + 1);
-      i = number.indexOf("\"");
-      number = number.substring(0, i);
+      // number = line.substring(i + 1);
+      // i = number.indexOf("\"");
+      // number = number.substring(0, i);
+
+      line = line.substring(i + 1);
+      i = line.indexOf("\"");
+      line = line.substring(0, i);
+      line.toCharArray(number, line.length() + 1);
+
+      Serial.println ("Numero: ");
+      Serial.println(number);
     } else if (line.indexOf("NO CARRIER") != -1) {
-      ring = false;
-      number = "";
+      carrier = false;
     } else if (line.indexOf("+CMTI:") != -1) {
       //+CMTI: "SM",5 -> Nuevo mensaje
       // NEW SMS
+      sms = true;
     }
   }
 
   status = GSM.getCallStatus();
 }
 
-bool sendSms() {
-  updateStatus();
+bool sendSms(String* data) {
   if (status == 0) {
-    char* text = "Saldo";
-    char* number = "444";
-    bool r = GSM.sendSms(number, text);
-    if (!r){
-      Serial.println("Send SMS");
+    String n = parseProperty(data, String('n'), 17);
+    String b = parseProperty(data, String('b'), 255);
+
+    char number[n.length() + 1];
+    char body[b.length() + 1];
+    n.toCharArray(number, n.length() + 1);
+    b.toCharArray(body, b.length() + 1);
+
+    Serial.println(number);
+    Serial.println(body);
+
+    bool r = GSM.sendSms(number, body);
+    if (!r){ // False is Ok
+      Serial.println("Ok");
+      return true;
     }
+    Serial.println("Err");
+  }
+  return false;
+}
+
+bool readSms(uint8_t index) {
+  Serial.println(index);
+  if (status == 0) {
+    msg = GSM.readSms(index);
+    if (msg.length() > 255) {
+      msg = "";
+    }
+    if (msg != "") {
+      msg = msg.substring(msg.indexOf("+CMGR:"), msg.length() - 4);
+    }
+    return true;
   }
   return false;
 }
 
 bool deleteSms() {
-  updateStatus();
-  uint8_t status = GSM.getCallStatus();
-  if (index > 1 && status == 0 && sms == false) {
-    bool d = false;
-    msg = GSM.readSms(index);
-    if (msg == "") {
-      msg = GSM.readSms(index);
-      if (msg == "") {
-        d = true;
-      }
-    }
-
-    if (d) {
-       GSM.delAllSms();
-       Serial.println("Delete SMS");
-       index = 1;
-    }
+  if (status == 0) {
+     if (GSM.delSms(1, 3) == false) { // False is OK
+       return true;
+     }
   }
+  return false;
 }

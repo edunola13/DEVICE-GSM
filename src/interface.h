@@ -14,19 +14,28 @@ struct RESPONSE {
   char body[30];
 };
 
+long refresh = 0;
+
+uint8_t action = 0;
+uint8_t lastAction = 0; // 0:Error, 1:Ok, x:Especifico
+bool actionFinish = false;
+bool prepareFinish = false;
 REQUEST req;
 String reqBody;
 RESPONSE res;
 String resBody;
+uint8_t part = 1;
+uint8_t of = 1;
+char partResBody[30];
 
 void sendData();
 void receiveData(int byteCount);
-String parseProperty(String* json, String property, uint8_t maxLength);
 
 void initI2c() {
   Wire.begin(SLAVE_ADDRESS);
   Wire.onRequest(sendData);
   Wire.onReceive(receiveData);
+  DEB_DO_PRINTLN("I2C Ready");
 }
 
 /*
@@ -34,24 +43,141 @@ LA RASPI SIEMPRE VA A HACER UN WRITE -> receiveData hace lo que tiene que hacer 
                                      -> sendData retorna lo que debe/paso en el receive
                                      -> de esta forma la raspi siempre sabe que es lo que paso
 */
-void sendData() {
-  // byte dataSend[] = {'a','2','3'}; //1 y 2 son bytes arbitrarios
-  // Wire.write(dataSend, 3);
-  // A ENVIAR
-  if (req.action == 11) {
-    // - Status
-  } else if(req.action == 12) {
-    // - Rta SMS
-  } else if(req.action == 13) {
-    // - SMS, Pasar sms = false, asi lee el proximo
-  } else if(req.action == 14) {
-    // - localizacion
+
+void simpleBody() {
+  if (lastAction == 1) {
+    byte data[] = "{\"s\":\"ok\"}";
+    memcpy(&res.body, data, sizeof(data));
+  } else {
+    byte data[] = "{\"s\":\"error\"}";
+    memcpy(&res.body, data, sizeof(data));
   }
 }
 
+void treatRequest() {
+  if (actionFinish) {
+    // Ya tratada
+    return;
+  }
+  if (req.part == 1) {
+    reqBody = "";
+  }
+  reqBody += String(req.body);
+  if (req.part != req.of) {
+    actionFinish = true;
+    return;
+  }
+  // ACCIONES
+  if (req.action == 1) {
+    // - Llamar a X
+    String n = parseProperty(&reqBody, String('n'), 17);
+    char number[n.length() + 1];
+    n.toCharArray(number, n.length() + 1);
+    lastAction = GSM.callNumber(number) ? 0 : 1;
+  } else if(req.action == 2) {
+    // - Atender
+    lastAction = GSM.answerCall() ? 0 : 1;
+  } else if(req.action == 3) {
+    // - Cortar
+    lastAction = GSM.hangoffCall() ? 0 : 1;
+  } else if(req.action == 4) {
+    // - Enviar SMS
+    lastAction = sendSms(&reqBody) ? 1 : 0;
+  } else if(req.action == 5){
+    // - Leer SMS
+    uint8_t i = parseProperty(&reqBody, String('i'), 3).toInt();
+    lastAction = readSms(i) ? 1 : 0;
+    if (lastAction == 1) {
+      resBody = String("{\"b\":\"") + msg + String("\"}");
+      msg = "";
+    }
+  } else if(req.action == 6){
+    // Eliminar SMS
+    lastAction = deleteSms() ? 1 : 0;
+  } else if(req.action == 7) {
+    // Calcular Location
+    lastAction = GSM.calculateLocation() ? 1 : 0;
+  }
+  actionFinish = true;
+  reqBody = "";
+}
+
+void prepareRes() {
+  if (prepareFinish) {
+    // Ya tratada
+    return;
+  }
+  if(req.action == 30) {
+    memset(&partResBody, 255, sizeof(partResBody));
+    of = resBody.length() / 30;
+    if (of*30 < resBody.length()) {
+      of += 1;
+    }
+    String body = resBody.substring((req.part - 1) * 30, req.part * 30);
+    body.toCharArray(partResBody, body.length() + 1);
+  }
+  prepareFinish = true;
+}
+
+// Esto hay que hacerlo lo mas rapido posible porque es una interrupcion.
+void sendData() {
+  res.part = 1;
+  res.of = 1;
+  // A ENVIAR
+  if (! actionFinish || ! prepareFinish) {
+    byte data[] = "{\"s\":\"no_end\"}";
+    memcpy(&res.body, data, sizeof(data));
+  } else {
+    if (req.action == 31) {
+      // - Lectura de bodies largos y que hay que preparar antes
+      res.part = part;
+      res.of = of;
+      memcpy(&res.body, partResBody, sizeof(partResBody));
+    } else {
+      //lastAction = 0;
+      simpleBody();
+    }
+    // if (action == 1 && req.action == 11) {
+    //   // - Respuesta llamar
+    //   simpleBody();
+    // } else if(action == 2 && req.action == 12) {
+    //   // - Respuesta atender
+    //   simpleBody();
+    // } else if(action == 3 && req.action == 13) {
+    //   // - Respuesta cortar
+    //   simpleBody();
+    // } else if(action == 4 && req.action == 14) {
+    //   // - Respuesta enviar SMS
+    //   simpleBody();
+    // } else if(action == 5 && req.action == 15) {
+    //   // - Leer SMS
+    //   simpleBody();
+    // } else if(action == 6 && req.action == 16) {
+    //   // - Eliminar SMSs
+    //   simpleBody();
+    // } else if(action == 7 && req.action == 17) {
+    //   // - Respuesta Localizacion
+    // } else if(req.action == 18) {
+    //   // - Ultima localizacion
+    // } else if (req.action == 20) {
+    //   // - Status
+    // } else if (req.action == 31) {
+    //
+    // } else {
+    //   //lastAction = 0;
+    //   simpleBody();
+    // }
+  }
+  // byte dataSend[32];
+  // memcpy(&dataSend, res, sizeof(res));
+  Wire.write((char *)&res, 32);
+}
+
+// Esto hay que hacerlo lo mas rapido posible porque es una interrupcion.
 void receiveData(int byteCount) {
-  // Clean REQUEST
+  refresh = millis() + 60000; // Actualizo el refresh
   memset(&req, 0, sizeof(req));
+  memset(&res, 0, sizeof(res));
   byte data[byteCount];
   uint8_t i = 0;
   while(Wire.available()) {
@@ -59,51 +185,20 @@ void receiveData(int byteCount) {
     i++;
   }
   memcpy(&req, data, sizeof(data));
-  Serial.println(req.action);
-  Serial.println(req.part);
-  Serial.println(req.of);
-  Serial.println(req.body);
-  // ACCIONES
-  if (req.action == 1) {
-    // - Llamar a X
-    reqBody = String(req.body);
-    String n = parseProperty(&reqBody, String('n'), 17);
-    char number[n.length()];
-    n.toCharArray(number, n.length() + 1);
-    GSM.callNumber(number);
-    // GUARDAR RESULTADO???
-    // CUANDO CORTO???
-  } else if(req.action == 2) {
-    GSM.answerCall();
-    // GUARDAR RESULTADO???
-    // CUANDO CORTO??? -> QUE CORTE EL QUE LLAMA
-  } else if(req.action == 3) {
-    reqBody += String(req.body);
-    if (req.part == req.of) {
-      String n = parseProperty(&reqBody, String('n'), 17);
-      char number[n.length()];
-      n.toCharArray(number, n.length() + 1);
-      String b = parseProperty(&reqBody, String('b'), 17);
-      char body[b.length()];
-      n.toCharArray(body, b.length() + 1);
-      GSM.sendSms(number, body);
-      // GUARDAR RESULTADO???
-    }
-  } else if(req.action == 4) {
-    GSM.calculateLocation();
-    // GUARDAR RESULTADO???
-  } // Ignorar el resto
-}
 
-String parseProperty(String* json, String property, uint8_t maxLength){
-  String val= "\"" + property + "\":";
-  int i= json->indexOf(val);
-  if(i != -1){
-    String subStr= json->substring(i + val.length() + 1, i + val.length() + 1 + maxLength + 1);
-    i= subStr.indexOf("\"");
-    subStr= subStr.substring(0, i);
-    return subStr;
-  }else{
-    return "null";
+  // ACCIONES MENORES A 10 EJECUTAN ALGUNA ACCION
+  if (req.action <= 10) {
+    action = req.action;
+    actionFinish = false;
+    lastAction = 0; // Error
+    part = 1;
+    resBody = "";
+  }
+  // ACCIONES ENTRE 11 Y 20 ES PARA LEER LO QUE PASO CON LAS ACCIONES DEL 1 AL 10
+  // ACCION 30 ES PARA INDICAR PAGINA DE LO QUE QUIERO LEER
+  if (req.action == 30) {
+    part = req.part;
+    of = 1;
+    prepareFinish = false;
   }
 }

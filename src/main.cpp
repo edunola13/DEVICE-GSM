@@ -7,6 +7,7 @@
 
 #include <common_initial.h>
 #include "messages.h"
+#include "parser.h"
 #include "gsm.h"
 #include "interface.h"
 
@@ -15,26 +16,22 @@ void setup() {
   DEB_DO_PRINTLN(MSG_START);
   initGsm();
   initI2c();
+  refresh = millis() + 60000;
 }
 
 void loop()
 {
   updateStatus();
-  if (status == 0) {
-    if (sms == false) { // If true wait for read from I2C
-      msg = GSM.readSms(index);
-      if (msg != "") {
-        msg = msg.substring(msg.indexOf("+CMGR:"), msg.length() - 4);
-        // Serial.println(msg);
-        sms = true;
-        index++;
-      }
-    }
+  // deleteSms(); -> Eliminar por acciones
+  treatRequest();
+  prepareRes();
+
+  if (refresh < millis()) {
+    refresh = millis() + 60000;
+    initI2c();
   }
 
-  deleteSms();
-
-  delay(500);
+  delay(250);
 }
 
 // void updateSerial();
