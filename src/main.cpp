@@ -1,4 +1,4 @@
-#include <SoftwareSerial.h>
+// #include <SoftwareSerial.h>
 
 #define DOMO_DEBUG
 #define DOMO_SPEED 9600
@@ -16,7 +16,7 @@ void setup() {
   DEB_DO_PRINTLN(MSG_START);
   initGsm();
   initI2c();
-  refresh = millis() + 60000;
+  refresh = millis() + 21000;
 }
 
 void loop()
@@ -27,7 +27,8 @@ void loop()
   prepareRes();
 
   if (refresh < millis()) {
-    refresh = millis() + 60000;
+    refresh = millis() + 21000;
+    initGsm();
     initI2c();
   }
 
@@ -42,7 +43,7 @@ void loop()
 // //  text = GSM.readSms(1);
 // //  Serial.println(text);
 // //  Serial.println("FIN");
-//  updateSerial();
+//   updateSerial();
 // }
 //
 // void updateSerial()

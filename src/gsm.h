@@ -64,7 +64,11 @@ void updateStatus() {
     }
   }
 
-  status = GSM.getCallStatus();
+  // Podria llevarlo a la accion = 10
+  status = GSM.getCallStatus(); // Es lo unico que hacemos sin permiso de I2C y que puede llegar a romper la comunicacion
+  if (status == 0) {
+    ring = false;
+  }
 }
 
 bool sendSms(String* data) {

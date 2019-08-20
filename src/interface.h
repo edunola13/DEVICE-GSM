@@ -97,6 +97,17 @@ void treatRequest() {
   } else if(req.action == 7) {
     // Calcular Location
     lastAction = GSM.calculateLocation() ? 1 : 0;
+    // ACA GUARDAR LA LOCALIZACION
+  } else if(req.action == 10) {
+    resBody = String("{\"s\":\"") + status + String("\",");
+    resBody += String("\"r\":\"") + ring + String("\",");
+    if (!ring) {
+      resBody += String("\"n\":\"") + String(number) + String("\",");
+      resBody += String("\"c\":\"") + carrier + String("\",");
+    }
+    resBody += String("\"m\":\"") + sms + String("\"}");
+    sms = false; // Reseteo
+    lastAction = 1;
   }
   actionFinish = true;
   reqBody = "";
@@ -137,45 +148,17 @@ void sendData() {
       //lastAction = 0;
       simpleBody();
     }
-    // if (action == 1 && req.action == 11) {
-    //   // - Respuesta llamar
-    //   simpleBody();
-    // } else if(action == 2 && req.action == 12) {
-    //   // - Respuesta atender
-    //   simpleBody();
-    // } else if(action == 3 && req.action == 13) {
-    //   // - Respuesta cortar
-    //   simpleBody();
-    // } else if(action == 4 && req.action == 14) {
-    //   // - Respuesta enviar SMS
-    //   simpleBody();
-    // } else if(action == 5 && req.action == 15) {
-    //   // - Leer SMS
-    //   simpleBody();
-    // } else if(action == 6 && req.action == 16) {
-    //   // - Eliminar SMSs
-    //   simpleBody();
-    // } else if(action == 7 && req.action == 17) {
-    //   // - Respuesta Localizacion
-    // } else if(req.action == 18) {
-    //   // - Ultima localizacion
-    // } else if (req.action == 20) {
-    //   // - Status
-    // } else if (req.action == 31) {
-    //
-    // } else {
-    //   //lastAction = 0;
-    //   simpleBody();
-    // }
   }
   // byte dataSend[32];
   // memcpy(&dataSend, res, sizeof(res));
   Wire.write((char *)&res, 32);
+  // byte dataSend[] = {1,1,'c', 'c', 'c', '2', 'd', 's', 'c', 'c', '2', 'a', '1'};
+  // Wire.write(dataSend, 13);
 }
 
 // Esto hay que hacerlo lo mas rapido posible porque es una interrupcion.
 void receiveData(int byteCount) {
-  refresh = millis() + 60000; // Actualizo el refresh
+  refresh = millis() + 21000; // Actualizo el refresh
   memset(&req, 0, sizeof(req));
   memset(&res, 0, sizeof(res));
   byte data[byteCount];
