@@ -31,8 +31,6 @@ void loop()
     initGsm();
     initI2c();
   }
-
-  delay(250);
 }
 
 // void updateSerial();

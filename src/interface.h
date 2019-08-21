@@ -99,13 +99,21 @@ void treatRequest() {
     lastAction = GSM.calculateLocation() ? 1 : 0;
     // ACA GUARDAR LA LOCALIZACION
   } else if(req.action == 10) {
-    resBody = String("{\"s\":\"") + status + String("\",");
-    resBody += String("\"r\":\"") + ring + String("\",");
-    if (!ring) {
-      resBody += String("\"n\":\"") + String(number) + String("\",");
-      resBody += String("\"c\":\"") + carrier + String("\",");
+    status = GSM.getCallStatus(); // Es lo unico que hacemos sin permiso de I2C y que puede llegar a romper la comunicacion
+    if (status == 0) {
+      ring = false;
     }
-    resBody += String("\"m\":\"") + sms + String("\"}");
+
+    resBody = String("{\"s\":") + status + String(",");
+    resBody += String("\"r\":") + ring + String(",");
+    if (ring) {
+      resBody += String("\"n\":\"") + String(number) + String("\",");
+      resBody += String("\"c\":") + carrier + String(",");
+    }
+    if (smsI) {
+      resBody += String("\"i\":") + smsI + String(",");
+    }
+    resBody += String("\"m\":") + sms + String("}");
     sms = false; // Reseteo
     lastAction = 1;
   }

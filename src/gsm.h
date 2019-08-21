@@ -11,6 +11,7 @@ bool ring = false; // New Call
 bool carrier = false; // Carrier
 bool sms = false; // New Sms
 String msg; // Last SMS read
+uint8_t smsI; // Last SMS Index
 // String number = ""; // Number calling
 char number[20]; // Number calling
 
@@ -26,7 +27,7 @@ void initGsm() {
 }
 
 void updateStatus() {
-  String data = GSM._readSerial(50);
+  String data = GSM._readSerialUntilTime(10);
   while (data.length() > 2) {
     Serial.println(data);
     uint8_t i = data.indexOf("\r\n");
@@ -47,27 +48,21 @@ void updateStatus() {
       // number = line.substring(i + 1);
       // i = number.indexOf("\"");
       // number = number.substring(0, i);
-
       line = line.substring(i + 1);
       i = line.indexOf("\"");
       line = line.substring(0, i);
       line.toCharArray(number, line.length() + 1);
-
-      Serial.println ("Numero: ");
-      Serial.println(number);
     } else if (line.indexOf("NO CARRIER") != -1) {
       carrier = false;
     } else if (line.indexOf("+CMTI:") != -1) {
       //+CMTI: "SM",5 -> Nuevo mensaje
       // NEW SMS
+      i = line.indexOf("\",");
+      if (i != -1) {
+        smsI = line.substring(i + 2).toInt();
+      }
       sms = true;
     }
-  }
-
-  // Podria llevarlo a la accion = 10
-  status = GSM.getCallStatus(); // Es lo unico que hacemos sin permiso de I2C y que puede llegar a romper la comunicacion
-  if (status == 0) {
-    ring = false;
   }
 }
 
@@ -81,9 +76,6 @@ bool sendSms(String* data) {
     n.toCharArray(number, n.length() + 1);
     b.toCharArray(body, b.length() + 1);
 
-    Serial.println(number);
-    Serial.println(body);
-
     bool r = GSM.sendSms(number, body);
     if (!r){ // False is Ok
       Serial.println("Ok");
@@ -95,11 +87,10 @@ bool sendSms(String* data) {
 }
 
 bool readSms(uint8_t index) {
-  Serial.println(index);
   if (status == 0) {
     msg = GSM.readSms(index);
     if (msg.length() > 255) {
-      msg = "";
+      msg = msg.substring(0, 255);
     }
     if (msg != "") {
       msg = msg.substring(msg.indexOf("+CMGR:"), msg.length() - 4);
