@@ -17,6 +17,16 @@ void setup() {
   initGsm();
   initI2c();
   refresh = millis() + 21000;
+  // Reserve Memory
+  // reqBody.reserve(255);
+  // resBody.reserve(255);
+  // msg.reserve(255);
+  //
+  //
+  // NOTA IMPORTANTE DE STRING: no esta bueno tener strings en el main porq nunca se limpian bien
+  // se limpian bien cuando se mueren (en funcion por ejemplo), el reservar sirve si no voy a usar mas que eso.
+  //
+  //
 }
 
 void loop()

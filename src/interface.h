@@ -1,4 +1,5 @@
 #include <Wire.h>
+#include "free.h"
 
 #define SLAVE_ADDRESS 0x04
 
@@ -21,7 +22,8 @@ uint8_t lastAction = 0; // 0:Error, 1:Ok, x:Especifico
 bool actionFinish = false;
 bool prepareFinish = false;
 REQUEST req;
-String reqBody;
+// String reqBody;
+char reqBody_array[97];
 RESPONSE res;
 String resBody;
 uint8_t part = 1;
@@ -35,7 +37,7 @@ void initI2c() {
   Wire.begin(SLAVE_ADDRESS);
   Wire.onRequest(sendData);
   Wire.onReceive(receiveData);
-  DEB_DO_PRINTLN("I2C Ready");
+  DEB_DO_PRINTLN(F("I2C Ready"));
 }
 
 /*
@@ -59,11 +61,18 @@ void treatRequest() {
     // Ya tratada
     return;
   }
+  String reqBody = String(reqBody_array);
   if (req.part == 1) {
-    reqBody = "";
+    reqBody = String("");
   }
-  reqBody += String(req.body);
+
+  String part_x = String(req.body);
+  if (part_x.length() > 29) {
+    part_x = part_x.substring(0, 29);
+  }
+  reqBody += part_x;
   if (req.part != req.of) {
+    reqBody.toCharArray(reqBody_array, reqBody.length() + 1);
     actionFinish = true;
     return;
   }
@@ -88,8 +97,12 @@ void treatRequest() {
     uint8_t i = parseProperty(&reqBody, String('i'), 3).toInt();
     lastAction = readSms(i) ? 1 : 0;
     if (lastAction == 1) {
-      resBody = String("{\"b\":\"") + msg + String("\"}");
-      msg = "";
+      resBody = "{\"b\":\"";
+      // resBody += msg;
+      resBody += String(msg_array);
+      resBody += "\"}";
+      // msg = String("");
+      // msg.remove(0, 1000);
     }
   } else if(req.action == 6){
     // Eliminar SMS
@@ -98,7 +111,20 @@ void treatRequest() {
     // Calcular Location
     lastAction = GSM.calculateLocation() ? 1 : 0;
     // ACA GUARDAR LA LOCALIZACION
+  } else if(req.action == 9) {
+    // INFO VARIA: IR AGREGANDO, SI ESTA CONECTADO, CHIP_ID, ETC
+    String signal = GSM.signalQuality();
+    if (signal.indexOf(F("+CSQ:")) != -1) {
+      uint8_t i = signal.indexOf(F("+CSQ:"));
+      signal = signal.substring(i + 6);
+      i = signal.indexOf(F("\r\n"));
+      if (i != -1) {
+        signal = signal.substring(0, i);
+      }
+    }
+    resBody = String("{\"sig\":\"") + signal + String("\"}");
   } else if(req.action == 10) {
+    GSM.setMessageFormat(F("1"));
     status = GSM.getCallStatus(); // Es lo unico que hacemos sin permiso de I2C y que puede llegar a romper la comunicacion
     if (status == 0) {
       ring = false;
@@ -118,7 +144,9 @@ void treatRequest() {
     lastAction = 1;
   }
   actionFinish = true;
-  reqBody = "";
+  // reqBody = String("");
+  Serial.print("Memoria: ");
+  Serial.println(freeMemory());
 }
 
 void prepareRes() {
@@ -136,6 +164,8 @@ void prepareRes() {
     body.toCharArray(partResBody, body.length() + 1);
   }
   prepareFinish = true;
+  Serial.print("Memoria: ");
+  Serial.println(freeMemory());
 }
 
 // Esto hay que hacerlo lo mas rapido posible porque es una interrupcion.
@@ -168,7 +198,7 @@ void sendData() {
 void receiveData(int byteCount) {
   refresh = millis() + 21000; // Actualizo el refresh
   memset(&req, 0, sizeof(req));
-  memset(&res, 0, sizeof(res));
+  memset(&res, 255, sizeof(res));
   byte data[byteCount];
   uint8_t i = 0;
   while(Wire.available()) {
@@ -183,7 +213,8 @@ void receiveData(int byteCount) {
     actionFinish = false;
     lastAction = 0; // Error
     part = 1;
-    resBody = "";
+    // resBody = String("");
+    resBody.remove(0, 1000);
   }
   // ACCIONES ENTRE 11 Y 20 ES PARA LEER LO QUE PASO CON LAS ACCIONES DEL 1 AL 10
   // ACCION 30 ES PARA INDICAR PAGINA DE LO QUE QUIERO LEER
