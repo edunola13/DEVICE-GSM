@@ -108,6 +108,9 @@ void treatRequest() {
     // Eliminar SMS
     lastAction = deleteSms() ? 1 : 0;
   } else if(req.action == 7) {
+    // Eliminar todos los SMS
+    lastAction = deleteAllSms() ? 1 : 0;
+  } else if(req.action == 8) {
     // Calcular Location
     lastAction = GSM.calculateLocation() ? 1 : 0;
     // ACA GUARDAR LA LOCALIZACION
@@ -145,8 +148,6 @@ void treatRequest() {
   }
   actionFinish = true;
   // reqBody = String("");
-  Serial.print("Memoria: ");
-  Serial.println(freeMemory());
 }
 
 void prepareRes() {
@@ -164,8 +165,6 @@ void prepareRes() {
     body.toCharArray(partResBody, body.length() + 1);
   }
   prepareFinish = true;
-  Serial.print("Memoria: ");
-  Serial.println(freeMemory());
 }
 
 // Esto hay que hacerlo lo mas rapido posible porque es una interrupcion.

@@ -24,6 +24,7 @@ void initGsm() {
     delay(500);
     config = GSM.setMessageStorage(F("SM"));  // Cuando se llena guarda en memoria, MAXIMO 30
     config = config && GSM.setMessageFormat(F("1"));
+    GSM.setClip(F("1"));  // No controlamos esta accion
   }
   DEB_DO_PRINTLN(F("GSM Ready"));
 }
@@ -69,7 +70,6 @@ void updateStatus() {
 }
 
 bool sendSms(String* data) {
-  Serial.println("Error");
   if (status == 0) {
     String n = parseProperty(data, String('n'), 17);
     String b = parseProperty(data, String('b'), 255);
@@ -80,7 +80,6 @@ bool sendSms(String* data) {
     b.toCharArray(body, b.length() + 1);
 
     bool r = GSM.sendSms(number, body);
-    Serial.println("Recien termino");
     if (!r){ // False is Ok
       Serial.println("Ok");
       return true;
@@ -88,21 +87,16 @@ bool sendSms(String* data) {
     Serial.println("Err");
     GSM.setMessageFormat(F("1"));
   }
-  Serial.print("Memoria: ");
-  Serial.println(freeMemory());
   return false;
 }
 
 bool readSms(uint8_t index) {
   if (status == 0) {
-    Serial.print("Memoria: ");
-    Serial.println(freeMemory());
-    String msg = GSM.readSms(index);
-    Serial.print("Memoria: ");
-    Serial.println(freeMemory());
-    if (msg.length() > 150) {
-      msg = msg.substring(0, 150);
-    }
+    String msg = "";
+    GSM.readSmsReference(index, msg, 150);
+    // if (msg.length() > 150) {
+    //   msg = msg.substring(0, 150);
+    // }
     if (msg != "") {
       msg = msg.substring(msg.indexOf(F("+CMGR:")), msg.length() - 4);
       msg.replace("\"", "'");
@@ -110,8 +104,6 @@ bool readSms(uint8_t index) {
 
     msg.toCharArray(msg_array, msg.length() + 1);
 
-    Serial.print("Memoria: ");
-    Serial.println(freeMemory());
     return true;
   }
   return false;
@@ -120,6 +112,15 @@ bool readSms(uint8_t index) {
 bool deleteSms() {
   if (status == 0) {
      if (GSM.delSms(1, 3) == false) { // False is OK
+       return true;
+     }
+  }
+  return false;
+}
+
+bool deleteAllSms() {
+  if (status == 0) {
+     if (GSM.delAllSms() == false) { // False is OK
        return true;
      }
   }
